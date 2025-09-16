@@ -5,13 +5,14 @@ pipeline {
     }
     stages {
         stage("Build") {
-            steps {
-                echo "Cleaning workspace before build"
-                deleteDir() // cleans the entire workspace to avoid leftover artifacts
-                echo "Executing build"
-                sh "mvn clean install " 
-            }
-        }
+           steps {
+        echo "Cleaning workspace before build"
+        deleteDir() // removes everything
+        checkout scm // restores project files
+        echo "Executing build"
+        sh "mvn clean install"
+      }
+      }           
         stage("Test") {
             steps {
                 echo "Executing test"
