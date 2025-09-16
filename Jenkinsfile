@@ -11,6 +11,7 @@ pipeline {
             steps {
                 echo "Cleaning workspace before build"
                 deleteDir() // cleans the entire workspace
+                checkout scm // restores project files
                 echo "Executing build"
                 sh "mvn clean install"
             }
