@@ -4,7 +4,7 @@ pipeline {
         maven 'maven-3.9.11'
     }
     environment {
-        SONAR_HOST_URL = "http://localhost:9002" 
+        SONAR_HOST_URL = "http://localhost:9000" 
     }
     stages {
         stage("Build") {
