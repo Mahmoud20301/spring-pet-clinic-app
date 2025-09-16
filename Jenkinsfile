@@ -1,20 +1,24 @@
-pipeline{
+pipeline {
     agent any
-    stages{
-        stage("build"){
-            steps{
-                echo "executing build"
+    tools {
+        maven 'maven-3.9.11'  
+    }
+    stages {
+        stage("Build") {
+            steps {
+                echo "Executing build"
+                sh "mvn clean install"
             }
         }
-        stage("test"){
-            steps{
-                echo "executing test"
+        stage("Test") {
+            steps {
+                echo "Executing test"
             }
         }
-        stage("deploy"){
-            steps{
-                echo "executing deploy"
+        stage("Deploy") {
+            steps {
+                echo "Executing deploy"
             }
         }
-        }
+    }
 }
