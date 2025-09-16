@@ -1,13 +1,15 @@
 pipeline {
     agent any
     tools {
-        maven 'maven-3.9.11'  
+        maven 'maven-3.9.11'
     }
     stages {
         stage("Build") {
             steps {
+                echo "Cleaning workspace before build"
+                deleteDir() // cleans the entire workspace to avoid leftover artifacts
                 echo "Executing build"
-                sh "mvn clean install"
+                sh "mvn clean install " 
             }
         }
         stage("Test") {
@@ -18,7 +20,6 @@ pipeline {
         stage("Deploy") {
             steps {
                 echo "Executing deploy"
-                
             }
         }
     }
