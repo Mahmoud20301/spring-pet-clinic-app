@@ -25,9 +25,21 @@ pipeline {
             }
         }
         stage("Deploy") {
-            steps {
-                echo "Executing deploy"
+           steps {
+             echo "Building Docker image"
+               sh "docker build -t mahmoudmo123/spring-pipeline:${GIT_COMMIT} ."
+
+             echo "Logging in to Docker Hub"
+            withCredentials([usernamePassword(credentialsId: 'docker-token',
+                                         usernameVariable: 'DOCKER_USER',
+                                         passwordVariable: 'DOCKER_PASS')]) {
+              sh "echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin"
             }
-        }
+
+          echo "Pushing Docker image to registry"
+          sh "docker push mahmoudmo123/spring-pipeline:${GIT_COMMIT}"
+         }
+     }
+
     }
 }
