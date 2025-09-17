@@ -40,18 +40,13 @@ pipeline {
                 echo "Preparing to upload artifact to Nexus"
                 withCredentials([usernamePassword(credentialsId: 'NEXUS_CREDENTIALS', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
                     script {
-                        def version = sh(
-                            script: "mvn help:evaluate -Dexpression=project.version -q -DforceStdout",
-                            returnStdout: true
-                        ).trim()
+                        def version = sh(script: "mvn help:evaluate -Dexpression=project.version -q -DforceStdout", returnStdout: true).trim()
                         echo "Project version detected: ${version}"
                         def nexusRepo = version.endsWith("SNAPSHOT") ? "maven-snapshots" : "maven-releases"
                         echo "Deploying to Nexus repository: ${nexusRepo}"
 
                         def jarFiles = sh(script: "ls target/*.jar || true", returnStdout: true).trim()
-                        if (!jarFiles) {
-                            error "No jar file found in target/ directory. Build might have failed."
-                        }
+                        if (!jarFiles) { error "No jar file found in target/ directory. Build might have failed." }
                         def jarFile = jarFiles.split("\n")[0]
 
                         echo "Deploying jar: ${jarFile}"
@@ -70,7 +65,7 @@ pipeline {
             }
         }
 
-        stage("Build & Push Docker Image") {
+        stage("Build Docker Image") {
             steps {
                 script {
                     echo "Building Docker image: ${DOCKER_IMAGE}"
@@ -79,10 +74,11 @@ pipeline {
                     def dockerHubImage = "${DOCKER_HUB_REPO}:${BUILD_NUMBER}"
                     sh "docker tag ${DOCKER_IMAGE} ${dockerHubImage}"
 
-                    withCredentials([usernamePassword(credentialsId: 'DOCKER_HUB_CREDENTIALS', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                        sh 'echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin'
-                        sh "docker push ${dockerHubImage}"
-                    }
+                    // Docker Hub push commented out
+                    // withCredentials([usernamePassword(credentialsId: 'DOCKER_HUB_CREDENTIALS', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    //     sh 'echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin'
+                    //     sh "docker push ${dockerHubImage}"
+                    // }
                 }
             }
         }
@@ -92,17 +88,27 @@ pipeline {
                 script {
                     echo "Deploying app + Prometheus + Grafana with Docker Compose"
 
-                    // Make sure prometheus.yml exists in workspace root
-                    sh "test -f prometheus.yml || { echo 'Missing prometheus.yml in workspace root'; exit 1; }"
+                    dir("${WORKSPACE}") {
+                        // Check prometheus.yml exists
+                        sh "test -f prometheus.yml || { echo '❌ Missing prometheus.yml in workspace root'; exit 1; }"
 
-                    sh """
-                        BUILD_NUMBER=${BUILD_NUMBER} \
-                        APP_PORT=${APP_PORT} \
-                        docker compose -f docker-compose.monitoring.yml up -d --force-recreate
-                    """
-                    echo "App running at: http://localhost:${APP_PORT}"
-                    echo "Prometheus available at: http://localhost:9090"
-                    echo "Grafana available at: http://localhost:3000 (admin/admin)"
+                        // Ensure network exists
+                        sh "docker network inspect devops-network >/dev/null 2>&1 || docker network create devops-network"
+
+                        // Bring down existing stack first
+                        sh "docker compose -f docker-compose.monitoring.yml down || true"
+
+                        // Start the monitoring stack
+                        sh """
+                            BUILD_NUMBER=${BUILD_NUMBER} \
+                            APP_PORT=${APP_PORT} \
+                            docker compose -f docker-compose.monitoring.yml up -d --force-recreate
+                        """
+                    }
+
+                    echo "✅ App running at: http://localhost:${APP_PORT}"
+                    echo "✅ Prometheus available at: http://localhost:9090"
+                    echo "✅ Grafana available at: http://localhost:3000 (admin/admin)"
                 }
             }
         }
@@ -115,7 +121,7 @@ pipeline {
         success {
             echo "✅ Pipeline completed successfully."
             echo "Artifact uploaded to Nexus."
-            echo "Docker image pushed to Docker Hub."
+            echo "Docker image built locally (push skipped)."
             echo "Monitoring stack (Prometheus + Grafana) deployed."
         }
     }
