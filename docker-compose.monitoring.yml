@@ -1,11 +1,9 @@
-version: "3.8"
-
 services:
   app:
-    image: mahmoudmo123/spring-petclinic:${BUILD_NUMBER}
+    image: spring-petclinic:${BUILD_NUMBER}  # Use local image instead of Docker Hub
     container_name: spring-petclinic-app
     ports:
-      - "${APP_PORT}:8080"   
+      - "${APP_PORT}:8080"
     networks:
       - devops-network
     environment:
