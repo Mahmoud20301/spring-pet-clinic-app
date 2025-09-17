@@ -1,8 +1,15 @@
-services:
-  prometheus:
-    image: prom/prometheus
-    container_name: prometheus
-    volumes:
-      - /var/jenkins_home/prometheus.yml:/etc/prometheus/prometheus.yml
-    ports:
-      - "9090:9090"
+global:
+  scrape_interval: 5s     # How often to scrape targets by default
+  evaluation_interval: 5s # How often to evaluate rules
+
+scrape_configs:
+  # Scrape Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Scrape your Spring PetClinic app
+  - job_name: 'spring-petclinic'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['spring-petclinic-app:8080']
