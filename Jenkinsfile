@@ -26,24 +26,24 @@ pipeline {
         }
         stage("Deploy to Nexus") {
             steps {
-                echo "Deploying artifact to Nexus"
+                echo "Uploading artifact to Nexus"
                 withCredentials([usernamePassword(credentialsId: 'NEXUS_CREDENTIALS', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
                     script {
-                        // Get project version
-                        def version = sh(script: "mvn help:evaluate -Dexpression=project.version -q -DforceStdout", returnStdout: true).trim()
-                        
-                        // Select correct repository based on version
-                        def nexusRepo = version.endsWith("SNAPSHOT") ? "maven-snapshots" : "maven-releases"
-
-                        echo "Deploying version ${version} to repository ${nexusRepo}"
-
-                        // Deploy using container hostname
-                        sh """
-                            mvn deploy \
-                            -Dnexus.username=$NEXUS_USER \
-                            -Dnexus.password=$NEXUS_PASS \
-                            -DaltDeploymentRepository=nexus::default::http://nexus:8081/repository/${nexusRepo}/
-                        """
+                        nexusArtifactUploader(
+                            nexusVersion: 'nexus3',
+                            protocol: 'http',
+                            nexusUrl: 'nexus:8081',
+                            repository: 'spring-app',
+                            credentialsId: 'NEXUS_CREDENTIALS',
+                            groupId: 'org.springframework.samples',
+                            version: '3.5.0-SNAPSHOT',
+                            artifacts: [[
+                                artifactId: 'spring-boot-starter-parent',
+                                classifier: '',
+                                file: 'target/spring-petclinic-*.jar',
+                                type: 'jar'
+                            ]]
+                        )
                     }
                 }
             }
