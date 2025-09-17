@@ -7,8 +7,7 @@ pipeline {
         SONAR_HOST_URL = "http://sonarqube:9000"
         DOCKER_IMAGE = "spring-petclinic:${env.BUILD_NUMBER}"
         DOCKER_HUB_REPO = "mahmoudmo123/spring-pipeline"
-        APP_CONTAINER = "spring-petclinic-app"
-        APP_PORT = "8086"   
+        APP_PORT = "8086"
     }
     stages {
         stage("Build") {
@@ -82,16 +81,14 @@ pipeline {
         stage("Deploy & Monitoring") {
             steps {
                 script {
-                    echo "Deploying app container for Prometheus monitoring"
+                    echo "Deploying app + Prometheus + Grafana with Docker Compose"
                     sh """
-                        docker rm -f ${APP_CONTAINER} || true
-                        docker run -d --name ${APP_CONTAINER} \
-                          --network devops-network \
-                          -p ${APP_PORT}:8080 \
-                          ${DOCKER_HUB_REPO}:${env.BUILD_NUMBER}
+                        BUILD_NUMBER=${env.BUILD_NUMBER} APP_PORT=${APP_PORT} \
+                        docker-compose -f docker-compose.monitoring.yml up -d --force-recreate
                     """
-                    echo "App deployed on http://localhost:${APP_PORT}"
-                    echo "Prometheus will scrape metrics from /actuator/prometheus"
+                    echo "App running at: http://localhost:${APP_PORT}"
+                    echo "Prometheus: http://localhost:9090"
+                    echo "Grafana: http://localhost:3000 (admin/admin)"
                 }
             }
         }
@@ -102,7 +99,7 @@ pipeline {
             echo "Pipeline failed. Check build, credentials, repository permissions, and Maven configuration."
         }
         success {
-            echo "Pipeline completed successfully. Artifact is in Nexus, Docker image pushed, and container deployed for monitoring."
+            echo "Pipeline completed successfully. Artifact in Nexus, Docker image pushed, monitoring stack deployed."
         }
     }
 }
