@@ -29,14 +29,32 @@ pipeline {
                 echo "Deploying artifact to Nexus"
                 withCredentials([usernamePassword(credentialsId: 'NEXUS_CREDENTIALS', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
                     script {
-                        // Determine repository based on version
-                        def repo = sh(script: "mvn help:evaluate -Dexpression=project.version -q -DforceStdout", returnStdout: true).trim()
-                        def nexusRepo = repo.endsWith("SNAPSHOT") ? "maven-snapshots" : "maven-releases"
+                        // Get project version
+                        def version = sh(script: "mvn help:evaluate -Dexpression=project.version -q -DforceStdout", returnStdout: true).trim()
+                        
+                        // Select correct repository based on version
+                        def nexusRepo = version.endsWith("SNAPSHOT") ? "maven-snapshots" : "maven-releases"
 
-                        sh "mvn deploy -Dnexus.username=$NEXUS_USER -Dnexus.password=$NEXUS_PASS -DaltDeploymentRepository=nexus::default::http://nexus:8081/repository/${nexusRepo}/"
+                        echo "Deploying version ${version} to repository ${nexusRepo}"
+
+                        // Deploy using container hostname
+                        sh """
+                            mvn deploy \
+                            -Dnexus.username=$NEXUS_USER \
+                            -Dnexus.password=$NEXUS_PASS \
+                            -DaltDeploymentRepository=nexus::default::http://nexus:8081/repository/${nexusRepo}/
+                        """
                     }
                 }
             }
+        }
+    }
+    post {
+        failure {
+            echo "Pipeline failed. Check credentials, repository permissions, and Maven configuration."
+        }
+        success {
+            echo "Pipeline completed successfully."
         }
     }
 }
