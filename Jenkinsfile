@@ -28,7 +28,8 @@ pipeline {
             steps {
                 echo "Deploying artifact to Nexus"
                 withCredentials([usernamePassword(credentialsId: 'NEXUS_CREDENTIALS', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
-                    sh "mvn deploy -Dnexus.username=$NEXUS_USER -Dnexus.password=$NEXUS_PASS"
+                    sh "mvn deploy -Dnexus.username=$NEXUS_USER -Dnexus.password=$NEXUS_PASS -DaltDeploymentRepository=nexus::default::http://nexus-host:8081/repository/maven-releases/"
+
                 }
             }
         }
