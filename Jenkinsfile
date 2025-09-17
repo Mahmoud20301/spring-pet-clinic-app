@@ -83,9 +83,9 @@ pipeline {
                 script {
                     echo "Deploying app + Prometheus + Grafana with Docker Compose"
                     sh """
-
-                        sh "BUILD_NUMBER=${env.BUILD_NUMBER} APP_PORT=${APP_PORT}  docker compose -f docker-compose.monitoring.yml up -d --force-recreate"
-
+                        BUILD_NUMBER=${env.BUILD_NUMBER} \
+                        APP_PORT=${APP_PORT} \
+                        docker compose -f docker-compose.monitoring.yml up -d --force-recreate
                     """
                     echo "App running at: http://localhost:${APP_PORT}"
                     echo "Prometheus: http://localhost:9090"
