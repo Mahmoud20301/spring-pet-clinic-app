@@ -7,6 +7,7 @@ pipeline {
         SONAR_HOST_URL = "http://sonarqube:9000"
         DOCKER_IMAGE = "spring-petclinic:${env.BUILD_NUMBER}" 
         DOCKER_HUB_REPO = "mahmoudmo123/spring-pipeline"
+        DOCKER_NETWORK = "devops-network"
     }
     stages {
         stage("Build") {
@@ -68,36 +69,73 @@ pipeline {
 
                     // Push to Docker Hub using credentials safely
                     withCredentials([usernamePassword(credentialsId: 'DOCKER_HUB_CREDENTIALS', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                        // Use single quotes to prevent Groovy interpolation on secrets
                         sh 'echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin'
                         sh "docker push ${dockerHubImage}"
                     }
                 }
             }
         }
-    stage("Deploy to Environment") {
-     steps {
-        script {
-            echo "Deploying Docker image ${DOCKER_HUB_REPO}:${env.BUILD_NUMBER} to target environment"
 
-            // Stop and remove old container if exists
-            sh """
-            if [ \$(docker ps -aq -f name=spring-petclinic) ]; then
-                docker stop spring-petclinic
-                docker rm spring-petclinic
-            fi
-            """
+        stage("Deploy to Environment") {
+            steps {
+                script {
+                    echo "Deploying Docker image ${DOCKER_HUB_REPO}:${env.BUILD_NUMBER} to target environment"
 
-            sh """
-            docker run -d \
-                --name spring-petclinic \
-                -p 8086:8080 \
-                ${DOCKER_HUB_REPO}:${env.BUILD_NUMBER}
-            """
-            
-            echo "Deployment complete. Application should be running on port 8086."
+                    // Create network if it doesn't exist
+                    sh """
+                    if ! docker network ls | grep -q ${DOCKER_NETWORK}; then
+                        docker network create ${DOCKER_NETWORK}
+                    fi
+                    """
+
+                    // Stop and remove old container if exists
+                    sh """
+                    if [ \$(docker ps -aq -f name=spring-petclinic) ]; then
+                        docker stop spring-petclinic
+                        docker rm spring-petclinic
+                    fi
+                    """
+
+                    // Run new Spring container on the network
+                    sh """
+                    docker run -d \
+                        --name spring-petclinic \
+                        --network ${DOCKER_NETWORK} \
+                        -p 8086:8080 \
+                        ${DOCKER_HUB_REPO}:${env.BUILD_NUMBER}
+                    """
+                    
+                    echo "Deployment complete. Application should be running on port 8086."
+                }
+            }
         }
- 
+
+        stage("Setup Monitoring") {
+            steps {
+                script {
+                    echo "Starting Prometheus and Grafana monitoring..."
+
+                    // Start Prometheus
+                    sh """
+                    docker run -d --name prometheus \
+                        --network ${DOCKER_NETWORK} \
+                        -p 9090:9090 \
+                        -v ${WORKSPACE}/prometheus.yml:/etc/prometheus/prometheus.yml \
+                        prom/prometheus:latest
+                    """
+
+                    // Start Grafana
+                    sh """
+                    docker run -d --name grafana \
+                        --network ${DOCKER_NETWORK} \
+                        -p 3000:3000 \
+                        grafana/grafana:latest
+                    """
+
+                    echo "Prometheus running on port 9090, Grafana on port 3000"
+                }
+            }
+        }
     }
 
     post {
@@ -105,9 +143,7 @@ pipeline {
             echo "Pipeline failed. Check build, credentials, repository permissions, and Maven configuration."
         }
         success {
-            echo "Pipeline completed successfully. Artifact should now appear in Nexus and Docker image pushed to Docker Hub."
+            echo "Pipeline completed successfully. Artifact should now appear in Nexus, Docker image pushed, and monitoring setup running."
         }
-    }
-}
     }
 }
