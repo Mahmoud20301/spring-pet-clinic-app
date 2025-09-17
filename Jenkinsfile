@@ -5,8 +5,10 @@ pipeline {
     }
     environment {
         SONAR_HOST_URL = "http://sonarqube:9000"
-        DOCKER_IMAGE = "spring-petclinic:${env.BUILD_NUMBER}" 
+        DOCKER_IMAGE = "spring-petclinic:${env.BUILD_NUMBER}"
         DOCKER_HUB_REPO = "mahmoudmo123/spring-pipeline"
+        APP_CONTAINER = "spring-petclinic-app"
+        APP_PORT = "8086"   
     }
     stages {
         stage("Build") {
@@ -19,11 +21,16 @@ pipeline {
             }
         }
 
-        stage("Test") {
+        stage("Test & SonarQube") {
             steps {
                 echo "Running SonarQube analysis"
                 withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_AUTH_TOKEN')]) {
-                    sh "mvn test sonar:sonar -Dsonar.login=$SONAR_AUTH_TOKEN -Dsonar.projectKey=my-app -Dsonar.host.url=$SONAR_HOST_URL"
+                    sh """
+                        mvn test sonar:sonar \
+                        -Dsonar.login=$SONAR_AUTH_TOKEN \
+                        -Dsonar.projectKey=my-app \
+                        -Dsonar.host.url=$SONAR_HOST_URL
+                    """
                 }
             }
         }
@@ -62,16 +69,29 @@ pipeline {
                     echo "Building Docker image: ${DOCKER_IMAGE}"
                     sh "docker build -t ${DOCKER_IMAGE} ."
 
-                    // Tag image for Docker Hub
                     def dockerHubImage = "${DOCKER_HUB_REPO}:${env.BUILD_NUMBER}"
                     sh "docker tag ${DOCKER_IMAGE} ${dockerHubImage}"
-
-                    // Push to Docker Hub using credentials safely
                     withCredentials([usernamePassword(credentialsId: 'DOCKER_HUB_CREDENTIALS', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                        // Use single quotes to prevent Groovy interpolation on secrets
                         sh 'echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin'
                         sh "docker push ${dockerHubImage}"
                     }
+                }
+            }
+        }
+
+        stage("Deploy & Monitoring") {
+            steps {
+                script {
+                    echo "Deploying app container for Prometheus monitoring"
+                    sh """
+                        docker rm -f ${APP_CONTAINER} || true
+                        docker run -d --name ${APP_CONTAINER} \
+                          --network devops-network \
+                          -p ${APP_PORT}:8080 \
+                          ${DOCKER_HUB_REPO}:${env.BUILD_NUMBER}
+                    """
+                    echo "App deployed on http://localhost:${APP_PORT}"
+                    echo "Prometheus will scrape metrics from /actuator/prometheus"
                 }
             }
         }
@@ -82,7 +102,7 @@ pipeline {
             echo "Pipeline failed. Check build, credentials, repository permissions, and Maven configuration."
         }
         success {
-            echo "Pipeline completed successfully. Artifact should now appear in Nexus and Docker image pushed to Docker Hub."
+            echo "Pipeline completed successfully. Artifact is in Nexus, Docker image pushed, and container deployed for monitoring."
         }
     }
 }

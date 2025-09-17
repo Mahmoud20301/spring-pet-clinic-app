@@ -1,0 +1,40 @@
+version: "3.8"
+
+services:
+  app:
+    image: mahmoudmo123/spring-pipeline:${BUILD_NUMBER}
+    container_name: spring-petclinic-app
+    ports:
+      - "8086:8080"   
+    networks:
+      - devops-network
+    environment:
+      - JAVA_OPTS=-Xms256m -Xmx512m
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    networks:
+      - devops-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    networks:
+      - devops-network
+    depends_on:
+      - prometheus
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+
+networks:
+  devops-network:
+    external: true
