@@ -29,26 +29,33 @@ pipeline {
                 echo "Uploading artifact to Nexus"
                 withCredentials([usernamePassword(credentialsId: 'NEXUS_CREDENTIALS', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
                     script {
-                       def jarFile = sh(script: "ls target/*.jar | head -n 1", returnStdout: true).trim()
-                       echo "Uploading jar: ${jarFile}"
+                        // Detect project version
+                        def version = sh(script: "mvn help:evaluate -Dexpression=project.version -q -DforceStdout", returnStdout: true).trim()
+                        
+                        // Determine repository based on version
+                        def nexusRepo = version.endsWith("SNAPSHOT") ? "maven-snapshots" : "maven-releases"
+                        
+                        // Detect the built jar file
+                        def jarFile = sh(script: "ls target/*.jar | head -n 1", returnStdout: true).trim()
+                        echo "Deploying jar: ${jarFile} to repository: ${nexusRepo}"
 
+                        // Upload using Nexus Artifact Uploader
                         nexusArtifactUploader(
                             nexusVersion: 'nexus3',
                             protocol: 'http',
                             nexusUrl: 'nexus:8081',
-                            repository: 'spring-app',
+                            repository: nexusRepo,
                             credentialsId: 'NEXUS_CREDENTIALS',
                             groupId: 'org.springframework.samples',
-                            version: '3.5.0-SNAPSHOT',
-                           artifacts: [[
-                               artifactId: 'spring-boot-starter-parent',
-                               classifier: '',
-                               file: jarFile,
-                               type: 'jar'
-        ]]
-    )
-}
-
+                            version: version,
+                            artifacts: [[
+                                artifactId: 'spring-boot-starter-parent',
+                                classifier: '',
+                                file: jarFile,
+                                type: 'jar'
+                            ]]
+                        )
+                    }
                 }
             }
         }
