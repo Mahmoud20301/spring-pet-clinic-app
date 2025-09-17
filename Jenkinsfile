@@ -66,12 +66,11 @@ pipeline {
                     def dockerHubImage = "${DOCKER_HUB_REPO}:${env.BUILD_NUMBER}"
                     sh "docker tag ${DOCKER_IMAGE} ${dockerHubImage}"
 
-                    // Push to Docker Hub using credentials
+                    // Push to Docker Hub using credentials safely
                     withCredentials([usernamePassword(credentialsId: 'DOCKER_HUB_CREDENTIALS', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                        sh """
-                            echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
-                            docker push ${dockerHubImage}
-                        """
+                        // Use single quotes to prevent Groovy interpolation on secrets
+                        sh 'echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin'
+                        sh "docker push ${dockerHubImage}"
                     }
                 }
             }
