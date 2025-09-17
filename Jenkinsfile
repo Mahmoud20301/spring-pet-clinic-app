@@ -92,6 +92,7 @@ pipeline {
                     sh """
                     docker run -d \
                         --name spring-petclinic \
+                        --network devops-network \
                         -p 8086:8080 \
                         ${DOCKER_HUB_REPO}:${env.BUILD_NUMBER}
                     """
