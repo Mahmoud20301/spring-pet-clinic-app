@@ -1,6 +1,6 @@
 services:
   app:
-    image: spring-petclinic:${BUILD_NUMBER}  # Use local image instead of Docker Hub
+    image: spring-petclinic:${BUILD_NUMBER}
     container_name: spring-petclinic-app
     ports:
       - "${APP_PORT}:8080"
@@ -15,7 +15,8 @@ services:
     image: prom/prometheus:latest
     container_name: prometheus
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # Use absolute path and ensure the file exists
+      - ${WORKSPACE}/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     ports:
       - "9090:9090"
@@ -28,6 +29,9 @@ services:
       - '--web.console.templates=/etc/prometheus/consoles'
       - '--storage.tsdb.retention.time=200h'
       - '--web.enable-lifecycle'
+    # Add dependency to ensure app starts first
+    depends_on:
+      - app
 
   grafana:
     image: grafana/grafana:latest
@@ -36,7 +40,8 @@ services:
       - "3000:3000"
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./grafana-dashboards:/var/lib/grafana/dashboards
+      # Only mount dashboards if the directory exists
+      # - ./grafana-dashboards:/var/lib/grafana/dashboards
     networks:
       - devops-network
     depends_on:

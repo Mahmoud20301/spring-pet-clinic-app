@@ -74,11 +74,11 @@ pipeline {
                     def dockerHubImage = "${DOCKER_HUB_REPO}:${BUILD_NUMBER}"
                     sh "docker tag ${DOCKER_IMAGE} ${dockerHubImage}"
 
-                    // Docker Hub push commented out
+                    // Docker Hub push
                     withCredentials([usernamePassword(credentialsId: 'DOCKER_HUB_CREDENTIALS', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                         sh 'echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin'
-                         sh "docker push ${dockerHubImage}"
-                     }
+                        sh "docker push ${dockerHubImage}"
+                    }
                 }
             }
         }
@@ -89,21 +89,36 @@ pipeline {
                     echo "Deploying app + Prometheus + Grafana with Docker Compose"
 
                     dir("${WORKSPACE}") {
-                        // Check prometheus.yml exists
-                        sh "test -f prometheus.yml || { echo '❌ Missing prometheus.yml in workspace root'; exit 1; }"
+                        // Check prometheus.yml exists and is a file
+                        sh """
+                            if [ ! -f prometheus.yml ]; then
+                                echo '❌ Missing prometheus.yml in workspace root'
+                                exit 1
+                            fi
+                            echo '✅ prometheus.yml found'
+                            ls -la prometheus.yml
+                        """
 
-                        // Ensure network exists
+                        // Ensure Docker network exists
                         sh "docker network inspect devops-network >/dev/null 2>&1 || docker network create devops-network"
 
                         // Bring down existing stack first
                         sh "docker compose -f docker-compose.monitoring.yml down || true"
 
+                        // Clean up orphaned containers
+                        sh "docker container prune -f || true"
+
                         // Start the monitoring stack
                         sh """
                             BUILD_NUMBER=${BUILD_NUMBER} \
                             APP_PORT=${APP_PORT} \
+                            WORKSPACE=${WORKSPACE} \
                             docker compose -f docker-compose.monitoring.yml up -d --force-recreate
                         """
+
+                        // Wait and check container status
+                        sh "sleep 10"
+                        sh "docker compose -f docker-compose.monitoring.yml ps"
                     }
 
                     echo "✅ App running at: http://localhost:${APP_PORT}"
@@ -121,7 +136,7 @@ pipeline {
         success {
             echo "✅ Pipeline completed successfully."
             echo "Artifact uploaded to Nexus."
-            echo "Docker image built locally (push skipped)."
+            echo "Docker image built and pushed to Docker Hub."
             echo "Monitoring stack (Prometheus + Grafana) deployed."
         }
     }
