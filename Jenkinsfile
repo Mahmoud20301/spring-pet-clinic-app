@@ -5,6 +5,7 @@ pipeline {
     }
     environment {
         SONAR_HOST_URL = "http://sonarqube:9000"
+        DOCKER_IMAGE = "spring-petclinic:${env.BUILD_NUMBER}" 
     }
     stages {
         stage("Build") {
@@ -24,45 +25,45 @@ pipeline {
                 }
             }
         }
-        stage("Deploy to Nexus") {
+        stage("Push artifacts to Nexus") {
             steps {
                 echo "Preparing to upload artifact to Nexus"
                 withCredentials([usernamePassword(credentialsId: 'NEXUS_CREDENTIALS', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
                     script {
-                        // Detect project version
                         def version = sh(script: "mvn help:evaluate -Dexpression=project.version -q -DforceStdout", returnStdout: true).trim()
                         echo "Project version detected: ${version}"
-
-                        // Determine repository based on version
                         def nexusRepo = version.endsWith("SNAPSHOT") ? "maven-snapshots" : "maven-releases"
                         echo "Deploying to Nexus repository: ${nexusRepo}"
-
-                        // Detect the built jar file dynamically
                         def jarFiles = sh(script: "ls target/*.jar || true", returnStdout: true).trim()
-                        if (!jarFiles) {
-                            error "No jar file found in target/ directory. Build might have failed."
-                        }
-
+                        if (!jarFiles) { error "No jar file found in target/ directory. Build might have failed." }
                         def jarFile = jarFiles.split("\n")[0]
                         echo "Deploying jar: ${jarFile}"
-
-                        // Upload using Nexus Artifact Uploader
                         nexusArtifactUploader(
                             nexusVersion: 'nexus3',
                             protocol: 'http',
-                            nexusUrl: 'nexus:8081',  // container name in same Docker network
+                            nexusUrl: 'nexus:8081',
                             repository: nexusRepo,
                             credentialsId: 'NEXUS_CREDENTIALS',
                             groupId: 'org.springframework.samples',
                             version: version,
-                            artifacts: [[
-                                artifactId: 'spring-petclinic',
-                                classifier: '',
-                                file: jarFile,
-                                type: 'jar'
-                            ]]
+                            artifacts: [[artifactId: 'spring-petclinic', classifier: '', file: jarFile, type: 'jar']]
                         )
                     }
+                }
+            }
+        }
+        stage("Build Docker Image") {
+            steps {
+                script {
+                    echo "Building Docker image: ${DOCKER_IMAGE}"
+                    // Assuming you have a Dockerfile in your repo
+                    sh "docker build -t ${DOCKER_IMAGE} ."
+
+                    // Optional: push to Docker registry
+                    // withCredentials([usernamePassword(credentialsId: 'DOCKER_HUB', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    //     sh "echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin"
+                    //     sh "docker push ${DOCKER_IMAGE}"
+                    // }
                 }
             }
         }
@@ -72,7 +73,7 @@ pipeline {
             echo "Pipeline failed. Check build, credentials, repository permissions, and Maven configuration."
         }
         success {
-            echo "Pipeline completed successfully. Artifact should now appear in Nexus."
+            echo "Pipeline completed successfully. Artifact should now appear in Nexus and Docker image built."
         }
     }
 }
