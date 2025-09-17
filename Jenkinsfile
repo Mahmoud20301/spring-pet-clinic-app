@@ -12,7 +12,7 @@ pipeline {
                 echo "Cleaning workspace and checking out code"
                 deleteDir()
                 checkout scm
-                echo "Executing build"
+                echo "Executing build (skip tests)"
                 sh "mvn clean install -DskipTests"
             }
         }
@@ -26,7 +26,7 @@ pipeline {
         }
         stage("Deploy to Nexus") {
             steps {
-                echo "Uploading artifact to Nexus"
+                echo "Preparing to upload artifact to Nexus"
                 withCredentials([usernamePassword(credentialsId: 'NEXUS_CREDENTIALS', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
                     script {
                         // Detect project version
@@ -38,7 +38,12 @@ pipeline {
                         echo "Deploying to Nexus repository: ${nexusRepo}"
 
                         // Detect the built jar file dynamically
-                        def jarFile = sh(script: "ls target/*.jar | head -n 1", returnStdout: true).trim()
+                        def jarFiles = sh(script: "ls target/*.jar || true", returnStdout: true).trim()
+                        if (!jarFiles) {
+                            error "No jar file found in target/ directory. Build might have failed."
+                        }
+
+                        def jarFile = jarFiles.split("\n")[0]
                         echo "Deploying jar: ${jarFile}"
 
                         // Upload using Nexus Artifact Uploader
@@ -64,10 +69,10 @@ pipeline {
     }
     post {
         failure {
-            echo "Pipeline failed. Check credentials, repository permissions, and Maven configuration."
+            echo "Pipeline failed. Check build, credentials, repository permissions, and Maven configuration."
         }
         success {
-            echo "Pipeline completed successfully."
+            echo "Pipeline completed successfully. Artifact should now appear in Nexus."
         }
     }
 }
