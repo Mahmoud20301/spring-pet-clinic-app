@@ -5,7 +5,6 @@ pipeline {
     }
     environment {
         SONAR_HOST_URL = "http://sonarqube:9000"
-        NEXUS_REPO = "spring-app"  // updated repository name
     }
     stages {
         stage("Build") {
@@ -17,8 +16,7 @@ pipeline {
                 sh "mvn clean install -DskipTests"
             }
         }
-
-        stage("Test & SonarQube Analysis") {
+        stage("Test") {
             steps {
                 echo "Running SonarQube analysis"
                 withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_AUTH_TOKEN')]) {
@@ -26,7 +24,6 @@ pipeline {
                 }
             }
         }
-
         stage("Deploy to Nexus") {
             steps {
                 echo "Preparing to upload artifact to Nexus"
@@ -36,8 +33,8 @@ pipeline {
                         def version = sh(script: "mvn help:evaluate -Dexpression=project.version -q -DforceStdout", returnStdout: true).trim()
                         echo "Project version detected: ${version}"
 
-                        // Use custom repository for all versions
-                        def nexusRepo = env.NEXUS_REPO
+                        // Determine repository based on version
+                        def nexusRepo = version.endsWith("SNAPSHOT") ? "maven-snapshots" : "maven-releases"
                         echo "Deploying to Nexus repository: ${nexusRepo}"
 
                         // Detect the built jar file dynamically
@@ -53,7 +50,7 @@ pipeline {
                         nexusArtifactUploader(
                             nexusVersion: 'nexus3',
                             protocol: 'http',
-                            nexusUrl: 'nexus:8081',  
+                            nexusUrl: 'nexus:8081',  /
                             repository: nexusRepo,
                             credentialsId: 'NEXUS_CREDENTIALS',
                             groupId: 'org.springframework.samples',
@@ -64,19 +61,18 @@ pipeline {
                                 file: jarFile,
                                 type: 'jar'
                             ]]
-                         )
-                       }
-                       }
+                        )
                     }
-                   }
+                }
+            }
+        }
     }
-
     post {
         failure {
             echo "Pipeline failed. Check build, credentials, repository permissions, and Maven configuration."
         }
         success {
-            echo "Pipeline completed successfully. Artifact should now appear in Nexus repository: ${env.NEXUS_REPO}"
+            echo "Pipeline completed successfully. Artifact should now appear in Nexus."
         }
     }
 }
