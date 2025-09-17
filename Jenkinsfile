@@ -5,11 +5,9 @@ pipeline {
     }
     environment {
         SONAR_HOST_URL = "http://sonarqube:9000"
-        DOCKER_IMAGE = "spring-petclinic:${BUILD_NUMBER}"
+        DOCKER_IMAGE = "spring-petclinic:${env.BUILD_NUMBER}" 
         DOCKER_HUB_REPO = "mahmoudmo123/spring-pipeline"
-        APP_PORT = "8086"
     }
-
     stages {
         stage("Build") {
             steps {
@@ -21,16 +19,11 @@ pipeline {
             }
         }
 
-        stage("Test & SonarQube") {
+        stage("Test") {
             steps {
                 echo "Running SonarQube analysis"
                 withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_AUTH_TOKEN')]) {
-                    sh """
-                        mvn test sonar:sonar \
-                        -Dsonar.login=$SONAR_AUTH_TOKEN \
-                        -Dsonar.projectKey=my-app \
-                        -Dsonar.host.url=$SONAR_HOST_URL
-                    """
+                    sh "mvn test sonar:sonar -Dsonar.login=$SONAR_AUTH_TOKEN -Dsonar.projectKey=my-app -Dsonar.host.url=$SONAR_HOST_URL"
                 }
             }
         }
@@ -44,11 +37,9 @@ pipeline {
                         echo "Project version detected: ${version}"
                         def nexusRepo = version.endsWith("SNAPSHOT") ? "maven-snapshots" : "maven-releases"
                         echo "Deploying to Nexus repository: ${nexusRepo}"
-
                         def jarFiles = sh(script: "ls target/*.jar || true", returnStdout: true).trim()
                         if (!jarFiles) { error "No jar file found in target/ directory. Build might have failed." }
                         def jarFile = jarFiles.split("\n")[0]
-
                         echo "Deploying jar: ${jarFile}"
                         nexusArtifactUploader(
                             nexusVersion: 'nexus3',
@@ -65,79 +56,58 @@ pipeline {
             }
         }
 
-        stage("Build Docker Image") {
+        stage("Build & Push Docker Image") {
             steps {
                 script {
                     echo "Building Docker image: ${DOCKER_IMAGE}"
                     sh "docker build -t ${DOCKER_IMAGE} ."
 
-                    def dockerHubImage = "${DOCKER_HUB_REPO}:${BUILD_NUMBER}"
+                    // Tag image for Docker Hub
+                    def dockerHubImage = "${DOCKER_HUB_REPO}:${env.BUILD_NUMBER}"
                     sh "docker tag ${DOCKER_IMAGE} ${dockerHubImage}"
 
-                    // Docker Hub push
+                    // Push to Docker Hub using credentials safely
                     withCredentials([usernamePassword(credentialsId: 'DOCKER_HUB_CREDENTIALS', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                        // Use single quotes to prevent Groovy interpolation on secrets
                         sh 'echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin'
                         sh "docker push ${dockerHubImage}"
                     }
                 }
             }
         }
+    stage("Deploy to Environment") {
+     steps {
+        script {
+            echo "Deploying Docker image ${DOCKER_HUB_REPO}:${env.BUILD_NUMBER} to target environment"
 
-        stage("Deploy & Monitoring") {
-            steps {
-                script {
-                    echo "Deploying app + Prometheus + Grafana with Docker Compose"
+            // Stop and remove old container if exists
+            sh """
+            if [ \$(docker ps -aq -f name=spring-petclinic) ]; then
+                docker stop spring-petclinic
+                docker rm spring-petclinic
+            fi
+            """
 
-                    dir("${WORKSPACE}") {
-                        // Check prometheus.yml exists and is a file
-                        sh """
-                            if [ ! -f prometheus.yml ]; then
-                                echo '❌ Missing prometheus.yml in workspace root'
-                                exit 1
-                            fi
-                            echo '✅ prometheus.yml found'
-                            ls -la prometheus.yml
-                        """
-
-                        // Ensure Docker network exists
-                        sh "docker network inspect devops-network >/dev/null 2>&1 || docker network create devops-network"
-
-                        // Bring down existing stack first
-                        sh "docker compose -f docker-compose.monitoring.yml down || true"
-
-                        // Clean up orphaned containers
-                        sh "docker container prune -f || true"
-
-                        // Start the monitoring stack
-                        sh """
-                            BUILD_NUMBER=${BUILD_NUMBER} \
-                            APP_PORT=${APP_PORT} \
-                            WORKSPACE=${WORKSPACE} \
-                            docker compose -f docker-compose.monitoring.yml up -d --force-recreate
-                        """
-
-                        // Wait and check container status
-                        sh "sleep 10"
-                        sh "docker compose -f docker-compose.monitoring.yml ps"
-                    }
-
-                    echo "✅ App running at: http://localhost:${APP_PORT}"
-                    echo "✅ Prometheus available at: http://localhost:9090"
-                    echo "✅ Grafana available at: http://localhost:3000 (admin/admin)"
-                }
-            }
+            sh """
+            docker run -d \
+                --name spring-petclinic \
+                -p 8086:8080 \
+                ${DOCKER_HUB_REPO}:${env.BUILD_NUMBER}
+            """
+            
+            echo "Deployment complete. Application should be running on port 8086."
         }
+ 
     }
 
     post {
         failure {
-            echo "❌ Pipeline failed. Check build logs, credentials, Nexus/DockerHub access, or monitoring configs."
+            echo "Pipeline failed. Check build, credentials, repository permissions, and Maven configuration."
         }
         success {
-            echo "✅ Pipeline completed successfully."
-            echo "Artifact uploaded to Nexus."
-            echo "Docker image built and pushed to Docker Hub."
-            echo "Monitoring stack (Prometheus + Grafana) deployed."
+            echo "Pipeline completed successfully. Artifact should now appear in Nexus and Docker image pushed to Docker Hub."
         }
+    }
+}
     }
 }
