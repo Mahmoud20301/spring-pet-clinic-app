@@ -50,7 +50,7 @@ pipeline {
                         nexusArtifactUploader(
                             nexusVersion: 'nexus3',
                             protocol: 'http',
-                            nexusUrl: 'nexus:8081',  /
+                            nexusUrl: 'nexus:8081',  // container name in same Docker network
                             repository: nexusRepo,
                             credentialsId: 'NEXUS_CREDENTIALS',
                             groupId: 'org.springframework.samples',
