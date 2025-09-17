@@ -6,6 +6,7 @@ pipeline {
     environment {
         SONAR_HOST_URL = "http://sonarqube:9000"
         DOCKER_IMAGE = "spring-petclinic:${env.BUILD_NUMBER}" 
+        DOCKER_HUB_REPO = "mahmoudmo123/spring-pipeline"
     }
     stages {
         stage("Build") {
@@ -17,6 +18,7 @@ pipeline {
                 sh "mvn clean install -DskipTests"
             }
         }
+
         stage("Test") {
             steps {
                 echo "Running SonarQube analysis"
@@ -25,6 +27,7 @@ pipeline {
                 }
             }
         }
+
         stage("Push artifacts to Nexus") {
             steps {
                 echo "Preparing to upload artifact to Nexus"
@@ -52,28 +55,35 @@ pipeline {
                 }
             }
         }
-        stage("Build Docker Image") {
+
+        stage("Build & Push Docker Image") {
             steps {
                 script {
                     echo "Building Docker image: ${DOCKER_IMAGE}"
-                    // Assuming you have a Dockerfile in your repo
                     sh "docker build -t ${DOCKER_IMAGE} ."
 
-                    // Optional: push to Docker registry
-                    // withCredentials([usernamePassword(credentialsId: 'DOCKER_HUB', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                    //     sh "echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin"
-                    //     sh "docker push ${DOCKER_IMAGE}"
-                    // }
+                    // Tag image for Docker Hub
+                    def dockerHubImage = "${DOCKER_HUB_REPO}:${env.BUILD_NUMBER}"
+                    sh "docker tag ${DOCKER_IMAGE} ${dockerHubImage}"
+
+                    // Push to Docker Hub using credentials
+                    withCredentials([usernamePassword(credentialsId: 'DOCKER_HUB_CREDENTIALS', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                        sh """
+                            echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                            docker push ${dockerHubImage}
+                        """
+                    }
                 }
             }
         }
     }
+
     post {
         failure {
             echo "Pipeline failed. Check build, credentials, repository permissions, and Maven configuration."
         }
         success {
-            echo "Pipeline completed successfully. Artifact should now appear in Nexus and Docker image built."
+            echo "Pipeline completed successfully. Artifact should now appear in Nexus and Docker image pushed to Docker Hub."
         }
     }
 }
