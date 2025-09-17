@@ -115,21 +115,30 @@ pipeline {
                 script {
                     echo "Starting Prometheus and Grafana monitoring..."
 
-                    // Start Prometheus
+                    // Start Prometheus container
                     sh """
-                    docker run -d --name prometheus \
-                        --network ${DOCKER_NETWORK} \
-                        -p 9090:9090 \
-                        -v ${WORKSPACE}/prometheus.yml:/etc/prometheus/prometheus.yml \
-                        prom/prometheus:latest
+                    docker run -d --name prometheus --network ${DOCKER_NETWORK} -p 9090:9090 prom/prometheus:latest
                     """
 
-                    // Start Grafana
+                    // Create prometheus.yml inside container
                     sh """
-                    docker run -d --name grafana \
-                        --network ${DOCKER_NETWORK} \
-                        -p 3000:3000 \
-                        grafana/grafana:latest
+                    docker exec prometheus sh -c 'cat <<EOF > /etc/prometheus/prometheus.yml
+global:
+  scrape_interval: 15s
+scrape_configs:
+  - job_name: "spring-petclinic"
+    metrics_path: "/actuator/prometheus"
+    static_configs:
+      - targets: ["spring-petclinic:8080"]
+EOF'
+                    """
+
+                    // Restart Prometheus to load the config
+                    sh "docker restart prometheus"
+
+                    // Start Grafana container
+                    sh """
+                    docker run -d --name grafana --network ${DOCKER_NETWORK} -p 3000:3000 grafana/grafana:latest
                     """
 
                     echo "Prometheus running on port 9090, Grafana on port 3000"
@@ -143,7 +152,7 @@ pipeline {
             echo "Pipeline failed. Check build, credentials, repository permissions, and Maven configuration."
         }
         success {
-            echo "Pipeline completed successfully. Artifact should now appear in Nexus, Docker image pushed, and monitoring setup running."
+            echo "Pipeline completed successfully. Artifact deployed, Docker image pushed, and monitoring setup running."
         }
     }
 }
