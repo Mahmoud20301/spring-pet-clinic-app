@@ -29,6 +29,9 @@ pipeline {
                 echo "Uploading artifact to Nexus"
                 withCredentials([usernamePassword(credentialsId: 'NEXUS_CREDENTIALS', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
                     script {
+                       def jarFile = sh(script: "ls target/*.jar | head -n 1", returnStdout: true).trim()
+                       echo "Uploading jar: ${jarFile}"
+
                         nexusArtifactUploader(
                             nexusVersion: 'nexus3',
                             protocol: 'http',
@@ -37,14 +40,15 @@ pipeline {
                             credentialsId: 'NEXUS_CREDENTIALS',
                             groupId: 'org.springframework.samples',
                             version: '3.5.0-SNAPSHOT',
-                            artifacts: [[
-                                artifactId: 'spring-boot-starter-parent',
-                                classifier: '',
-                                file: 'target/spring-petclinic-*.jar',
-                                type: 'jar'
-                            ]]
-                        )
-                    }
+                           artifacts: [[
+                               artifactId: 'spring-boot-starter-parent',
+                               classifier: '',
+                               file: jarFile,
+                               type: 'jar'
+        ]]
+    )
+}
+
                 }
             }
         }
