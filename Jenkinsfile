@@ -92,6 +92,9 @@ pipeline {
                 script {
                     echo "Deploying app + Prometheus + Grafana with Docker Compose"
 
+                    // Make sure prometheus.yml exists in workspace root
+                    sh "test -f prometheus.yml || { echo 'Missing prometheus.yml in workspace root'; exit 1; }"
+
                     sh """
                         BUILD_NUMBER=${BUILD_NUMBER} \
                         APP_PORT=${APP_PORT} \
@@ -107,10 +110,13 @@ pipeline {
 
     post {
         failure {
-            echo "Pipeline failed. Check build, credentials, repository permissions, and Maven configuration."
+            echo "❌ Pipeline failed. Check build logs, credentials, Nexus/DockerHub access, or monitoring configs."
         }
         success {
-            echo "Pipeline completed successfully. Artifact in Nexus, Docker image pushed, monitoring stack deployed."
+            echo "✅ Pipeline completed successfully."
+            echo "Artifact uploaded to Nexus."
+            echo "Docker image pushed to Docker Hub."
+            echo "Monitoring stack (Prometheus + Grafana) deployed."
         }
     }
 }
