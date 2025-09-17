@@ -1,6 +1,6 @@
 pipeline {
     agent any
-    tools {    
+    tools {
         maven 'maven-3.9.11'
     }
     environment {
@@ -9,10 +9,10 @@ pipeline {
     stages {
         stage("Build") {
             steps {
-                echo "Cleaning workspace before build"
+                echo "Cleaning workspace and checking out code"
                 deleteDir()
                 checkout scm
-                echo "Executing Maven build"
+                echo "Executing build"
                 sh "mvn clean install"
             }
         }
@@ -24,27 +24,13 @@ pipeline {
                 }
             }
         }
-        stage("Deploy") {
+        stage("Deploy to Nexus") {
             steps {
-                echo "Building Docker image using Dockerfile"
-                sh "docker build -t mahmoudmo123/spring-pipeline:${GIT_COMMIT} ."
-
-                echo "Logging in to Docker Hub"
-                withCredentials([usernamePassword(credentialsId: 'docker-token',
-                                                 usernameVariable: 'DOCKER_USER',
-                                                 passwordVariable: 'DOCKER_PASS')]) {
-                    sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
+                echo "Deploying artifact to Nexus"
+                withCredentials([usernamePassword(credentialsId: 'NEXUS_CREDENTIALS', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
+                    sh "mvn deploy -Dnexus.username=$NEXUS_USER -Dnexus.password=$NEXUS_PASS"
                 }
-
-                echo "Pushing Docker image to Docker Hub"
-                sh "docker push mahmoudmo123/spring-pipeline:${GIT_COMMIT}"
             }
-        }
-    }
-    post {
-        always {
-            echo "Cleaning up workspace"
-            deleteDir()
         }
     }
 }
