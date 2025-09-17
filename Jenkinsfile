@@ -7,7 +7,6 @@ pipeline {
         SONAR_HOST_URL = "http://sonarqube:9000"
         DOCKER_IMAGE = "spring-petclinic:${env.BUILD_NUMBER}" 
         DOCKER_HUB_REPO = "mahmoudmo123/spring-pipeline"
-        DOCKER_NETWORK = "devops-network"
     }
     stages {
         stage("Build") {
@@ -81,13 +80,6 @@ pipeline {
                 script {
                     echo "Deploying Docker image ${DOCKER_HUB_REPO}:${env.BUILD_NUMBER} to target environment"
 
-                    // Create network if it doesn't exist
-                    sh """
-                    if ! docker network ls | grep -q ${DOCKER_NETWORK}; then
-                        docker network create ${DOCKER_NETWORK}
-                    fi
-                    """
-
                     // Stop and remove old container if exists
                     sh """
                     if [ \$(docker ps -aq -f name=spring-petclinic) ]; then
@@ -96,52 +88,15 @@ pipeline {
                     fi
                     """
 
-                    // Run new Spring container on the network
+                    // Run new container
                     sh """
                     docker run -d \
                         --name spring-petclinic \
-                        --network ${DOCKER_NETWORK} \
                         -p 8086:8080 \
                         ${DOCKER_HUB_REPO}:${env.BUILD_NUMBER}
                     """
                     
                     echo "Deployment complete. Application should be running on port 8086."
-                }
-            }
-        }
-
-        stage("Setup Monitoring") {
-            steps {
-                script {
-                    echo "Starting Prometheus and Grafana monitoring..."
-
-                    // Start Prometheus container
-                    sh """
-                    docker run -d --name prometheus --network ${DOCKER_NETWORK} -p 9090:9090 prom/prometheus:latest
-                    """
-
-                    // Create prometheus.yml inside container
-                    sh """
-                    docker exec prometheus sh -c 'cat <<EOF > /etc/prometheus/prometheus.yml
-global:
-  scrape_interval: 15s
-scrape_configs:
-  - job_name: "spring-petclinic"
-    metrics_path: "/actuator/prometheus"
-    static_configs:
-      - targets: ["spring-petclinic:8080"]
-EOF'
-                    """
-
-                    // Restart Prometheus to load the config
-                    sh "docker restart prometheus"
-
-                    // Start Grafana container
-                    sh """
-                    docker run -d --name grafana --network ${DOCKER_NETWORK} -p 3000:3000 grafana/grafana:latest
-                    """
-
-                    echo "Prometheus running on port 9090, Grafana on port 3000"
                 }
             }
         }
@@ -152,7 +107,7 @@ EOF'
             echo "Pipeline failed. Check build, credentials, repository permissions, and Maven configuration."
         }
         success {
-            echo "Pipeline completed successfully. Artifact deployed, Docker image pushed, and monitoring setup running."
+            echo "Pipeline completed successfully. Artifact should now appear in Nexus and Docker image pushed to Docker Hub."
         }
     }
 }
