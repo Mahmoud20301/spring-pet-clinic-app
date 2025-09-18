@@ -62,7 +62,6 @@ pipeline {
                     echo "Building Docker image: ${DOCKER_IMAGE}"
                     sh "docker build -t ${DOCKER_IMAGE} ."
 
-                    // Tag image for Docker Hub
                     def dockerHubImage = "${DOCKER_HUB_REPO}:${env.BUILD_NUMBER}"
                     sh "docker tag ${DOCKER_IMAGE} ${dockerHubImage}"
 
