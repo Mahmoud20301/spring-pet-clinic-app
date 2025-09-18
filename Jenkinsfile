@@ -88,7 +88,6 @@ pipeline {
                     fi
                     """
 
-                    // Run new container
                     sh """
                     docker run -d \
                         --name spring-petclinic \
