@@ -1,0 +1,97 @@
+version: "3.9"
+
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    ports:
+      - "9090:9090"
+    volumes:
+      - prometheus-data:/prometheus
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - devops-network
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+    networks:
+      - devops-network
+    environment:
+      - GF_PATHS_CONFIG=/etc/grafana/grafana.ini
+      - GF_PATHS_DATA=/var/lib/grafana
+      - GF_PATHS_HOME=/usr/share/grafana
+      - GF_PATHS_LOGS=/var/log/grafana
+      - GF_PATHS_PLUGINS=/var/lib/grafana/plugins
+      - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+    entrypoint: ["/run.sh"]
+    restart: unless-stopped
+
+  nexus:
+    image: sonatype/nexus3
+    container_name: nexus
+    ports:
+      - "8083:8081"
+    volumes:
+      - nexus-data:/nexus-data
+    networks:
+      - devops-network
+    user: "nexus"
+    command: ["/opt/sonatype/nexus/bin/nexus", "run"]
+    restart: unless-stopped
+
+  sonarqube:
+    image: sonarqube:lts
+    container_name: sonarqube
+    ports:
+      - "9002:9000"
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+    networks:
+      - devops-network
+    user: "sonarqube"
+    entrypoint: ["/opt/sonarqube/docker/entrypoint.sh"]
+    restart: unless-stopped
+
+  jenkins:
+    image: jenkins/jenkins:lts
+    container_name: jenkins
+    user: root
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - devops-network
+    environment:
+      JAVA_OPTS: "-Djenkins.install.runSetupWizard=false"
+    entrypoint:
+      - bash
+      - -c
+      - |
+        apt-get update && \
+        apt-get install -y docker.io && \
+        exec /usr/local/bin/jenkins.sh
+    restart: unless-stopped
+
+volumes:
+  prometheus-data:
+  grafana-data:
+  nexus-data:
+  sonarqube_data:
+  jenkins_home:
+
+networks:
+  devops-network:
+    driver: bridge
+    external: true
