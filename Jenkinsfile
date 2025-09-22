@@ -96,6 +96,10 @@ pipeline {
                     """
                     
                     echo "Deployment complete. Application should be running on port 8086."
+
+                    // Restart Prometheus so it can discover the new container
+                    echo "Restarting Prometheus to pick up new target..."
+                    sh "docker restart prometheus"
                 }
             }
         }
